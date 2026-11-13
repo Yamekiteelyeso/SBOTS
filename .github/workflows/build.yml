@@ -85,7 +85,7 @@ jobs:
           PAPER_SHA="$(printf '%s' "$PAPER_BUILD" | jq -r '.downloads["server:default"].checksums.sha256 // empty')"
           test -n "$PAPER_URL"
           curl -fsSL --retry 3 --connect-timeout 25 -H "User-Agent: ${AGENT}" "$PAPER_URL" -o server/paper.jar
-          if [ -n "$PAPER_SHA" ]; then printf '%s  %s\\n' "$PAPER_SHA" "server/paper.jar" | sha256sum --check; fi
+          if [ -n "$PAPER_SHA" ]; then printf '%s  %s\n' "$PAPER_SHA" "server/paper.jar" | sha256sum --check; fi
           printf 'eula=true\n' > server/eula.txt
           cat > server/server.properties <<'PROPS'
           server-port=25566
