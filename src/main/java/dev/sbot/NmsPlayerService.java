@@ -7,7 +7,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.Vec3;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.craftbukkit.v1_20_R1.CraftPlayer;
+import org.bukkit.craftbukkit.v1_20_R1.entity.CraftPlayer;
 import org.bukkit.craftbukkit.v1_20_R1.CraftServer;
 import org.bukkit.craftbukkit.v1_20_R1.CraftWorld;
 import org.bukkit.entity.Player;
@@ -54,7 +54,6 @@ final class NmsPlayerService {
         // Paper has installed the session listener as part of placeNewPlayer.
         // Attach it explicitly for keepalive acknowledgements.
         connection.attach(handle.connection);
-        handle.markClientLoaded();
         Player bukkit = handle.getBukkitEntity();
         bukkit.setSleepingIgnored(true);
         bukkit.setCollidable(false);
@@ -75,7 +74,6 @@ final class NmsPlayerService {
         if (done) {
             bot.location = player.getLocation();
             bot.handle.setDeltaMovement(Vec3.ZERO);
-            bot.handle.markClientLoaded();
         }
         return done;
     }
@@ -100,7 +98,6 @@ final class NmsPlayerService {
         bot.handle.setDeltaMovement(Vec3.ZERO);
         bot.handle.setNoGravity(true);
         bot.handle.setInvulnerable(true);
-        bot.handle.markClientLoaded();
     }
 
     static void remove(Bot bot) {

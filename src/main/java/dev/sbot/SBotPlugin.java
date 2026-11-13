@@ -30,6 +30,14 @@ public final class SBotPlugin extends JavaPlugin implements Listener {
             return;
         }
         saveDefaultConfig();
+        // Existing 2.0.0 installations had keep-bot-chunks-loaded: false.
+        // Migrate once so an upgrade fixes unloaded chunks without manual edits.
+        if (!getConfig().contains("auto-reconnect-missing-bots", true)) {
+            getConfig().set("keep-bot-chunks-loaded", true);
+            getConfig().set("prevent-automatic-kicks", true);
+            getConfig().set("auto-reconnect-missing-bots", true);
+            saveConfig();
+        }
         loadMessages();
         skinService = new SkinService(this);
         botManager = new BotManager(this, skinService);
