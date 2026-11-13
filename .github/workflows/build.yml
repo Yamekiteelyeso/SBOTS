@@ -51,3 +51,59 @@ jobs:
           path: dist/SBot-2.1.0-Paper-1.20.1.jar
           if-no-files-found: error
           retention-days: 30
+
+  smoke:
+    name: Test SBot on a real Paper server
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download compiled plugin
+        uses: actions/download-artifact@v4
+        with:
+          name: SBot-Paper-1.20.1
+          path: server/plugins/
+
+      - name: Download official Paper 1.20.1 and prepare world
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p server/plugins/SBot
+          curl -fsSL --retry 3 --connect-timeout 25 \
+            https://api.papermc.io/v2/projects/paper/versions/1.20.1/builds/196/downloads/paper-1.20.1-196.jar \
+            -o server/paper.jar
+          printf 'eula=true\\n' > server/eula.txt
+          cat > server/server.properties <<'PROPS'
+          server-port=25566
+          online-mode=false
+          max-players=20
+          level-name=world
+          enable-rcon=true
+          rcon.port=25575
+          rcon.password=sbot-smoke-test
+          spawn-protection=0
+          enforce-secure-profile=false
+          motd=SBot integration test
+          PROPS
+          cat > server/plugins/SBot/bots.yml <<'BOTS'
+          bots:
+            SBotTester:
+              world: world
+              x: 0.5
+              y: 75.0
+              z: 0.5
+              yaw: 0.0
+              pitch: 0.0
+          BOTS
+
+      - name: Verify a bot stays connected without human players
+        run: python3 scripts/smoke_test.py
