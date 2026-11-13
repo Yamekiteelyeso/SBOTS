@@ -8,6 +8,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerLoginEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
@@ -38,6 +40,9 @@ public final class SBotPlugin extends JavaPlugin implements Listener {
         registered.setExecutor(command);
         registered.setTabCompleter(command);
         Bukkit.getPluginManager().registerEvents(this, this);
+        Bukkit.getScheduler().runTaskTimer(this, () -> {
+            if (getConfig().getBoolean("auto-reconnect-missing-bots", true)) botManager.maintain();
+        }, 40L, 40L);
 
         if (Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")) {
             try {
@@ -68,6 +73,33 @@ public final class SBotPlugin extends JavaPlugin implements Listener {
         // A genuine player always takes precedence when using the same username.
         Bot fake = botManager.find(event.getPlayer().getName());
         if (fake != null) botManager.delete(fake.name);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onBotQuit(PlayerQuitEvent event) {
+        if (botManager != null && botManager.isBot(event.getPlayer())) {
+            getLogger().warning("Jugador simulado desconectado: " + event.getPlayer().getName()
+                    + ". SBot intentara restaurarlo.");
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onBotKick(PlayerKickEvent event) {
+        if (botManager == null || !botManager.isBot(event.getPlayer())) return;
+        String reason = ChatColor.stripColor(event.getReason()).toLowerCase(java.util.Locale.ROOT);
+        // Cancel only automatic disconnects related to absent fake clients.
+        // Do not suppress kicks imposed by other plugins or staff.
+        if (getConfig().getBoolean("prevent-automatic-kicks", true)
+                && (reason.contains("timed out") || reason.contains("timeout")
+                    || reason.contains("idling") || reason.contains("idle")
+                    || reason.contains("flying is not enabled"))) {
+            event.setCancelled(true);
+            getLogger().warning("Se evito la expulsion automatica de SBot "
+                    + event.getPlayer().getName() + ": " + reason);
+        } else {
+            getLogger().warning("SBot " + event.getPlayer().getName()
+                    + " fue expulsado: " + reason);
+        }
     }
 
     void loadMessages() {

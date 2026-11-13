@@ -11,15 +11,19 @@ import net.minecraft.server.network.ServerGamePacketListenerImpl;
 
 import java.net.InetSocketAddress;
 
-/**
- * Connection compatible with the 1.20.1 server-side login/player-list lifecycle.
- * No Microsoft session or TCP client is created; outbound gameplay packets are discarded.
- */
+/** Local, in-memory session. SBot players are not authenticated Minecraft clients. */
 final class FakeConnection extends Connection {
+    private volatile ServerGamePacketListenerImpl gameListener;
+
     FakeConnection() {
         super(PacketFlow.SERVERBOUND);
         this.channel = new EmbeddedChannel();
         this.address = new InetSocketAddress("127.0.0.1", 25565);
+    }
+
+    /** Called after Paper installs its real ServerGamePacketListenerImpl during join. */
+    void attach(ServerGamePacketListenerImpl listener) {
+        this.gameListener = listener;
     }
 
     @Override
@@ -28,10 +32,17 @@ final class FakeConnection extends Connection {
     }
 
     @Override
-    public void send(Packet<?> packet, PacketSendListener listener) {
-        if (packet instanceof ClientboundKeepAlivePacket keepAlive
-                && getPacketListener() instanceof ServerGamePacketListenerImpl gameListener) {
-            gameListener.handleKeepAlive(new ServerboundKeepAlivePacket(keepAlive.getId()));
+    public void send(Packet<?> packet, PacketSendListener callback) {
+        // No network peer exists: acknowledge vanilla keepalives immediately instead
+        // of allowing the player-list connection to be kicked by its timeout.
+        if (packet instanceof ClientboundKeepAlivePacket keepAlive) {
+            ServerGamePacketListenerImpl listener = gameListener;
+            if (listener == null && getPacketListener() instanceof ServerGamePacketListenerImpl fallback) {
+                listener = fallback;
+            }
+            if (listener != null) {
+                listener.handleKeepAlive(new ServerboundKeepAlivePacket(keepAlive.getId()));
+            }
         }
     }
 
@@ -42,6 +53,7 @@ final class FakeConnection extends Connection {
 
     @Override
     public void handleDisconnection() {
-        // Removal uses PlayerList.remove(ServerPlayer), not socket disconnect.
+        // A synthetic connection cannot close a socket. PlayerList.remove()
+        // handles removal explicitly.
     }
 }

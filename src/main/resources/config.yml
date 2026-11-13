@@ -9,7 +9,11 @@ load-premium-skins: true
 skin-cache: true
 spawn-spacing-blocks: 2.0
 # Solo mientras el proceso Paper esta encendido.
-keep-bot-chunks-loaded: false
+keep-bot-chunks-loaded: true
+# Evita expulsiones por timeout / inactividad del cliente simulado.
+prevent-automatic-kicks: true
+# Un watchdog comprueba los jugadores cada 2 segundos y restaura entradas perdidas.
+auto-reconnect-missing-bots: true
 # Usa nombres publicos para cargar skins. Un bot NO adquiere el UUID premium real.
 # Si un usuario autentico entra con ese nombre, SBot le cede el nombre.
 premium-name-pool:

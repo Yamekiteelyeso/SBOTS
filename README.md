@@ -1,12 +1,12 @@
-# SBot 2.0.0 — jugadores simulados para Paper 1.20.1
+# SBot 2.1.0 — jugadores simulados para Paper 1.20.1
 
 **Objetivo:** registrar jugadores simulados dentro del `PlayerList` nativo de Paper. No son NPCs mostrados únicamente por paquetes, ni hay una TAB propia. Están representados por objetos NMS `ServerPlayer` y conexiones internas sin un cliente TCP real.
 
-> **Estado de entrega:** código fuente actualizado; no compilado ni verificado en un servidor Minecraft durante esta entrega. NMS puede requerir ajustes para una compilación concreta de Paper 1.20.1. No instalar en producción sin probarlo en un servidor de pruebas.
+> **Estado:** los cambios se verifican en GitHub Actions; las pruebas dentro de Paper todavía requieren un servidor de pruebas antes de considerarlo apto para producción.
 
 ## Qué hace
 
-- `/sbot create <cantidad>`: prepara jugadores simulados en la ubicación de quien ejecuta el comando. Cada jugador se registra después de resolver su skin pública (o del fallback cuando el servicio falla). La respuesta del comando indica cuántos se **prepararon**, no implica que ya estén todos online.
+- `/sbot create <cantidad>`: registra inmediatamente jugadores simulados en la ubicación de quien ejecuta el comando. Si la skin no está en caché, la descarga en segundo plano sin bloquear la conexión.
 - Los `ServerPlayer` se registran mediante `PlayerList.placeNewPlayer`; una vez registrados deberían contar para los métodos `Bukkit.getOnlinePlayers()`, `/list` y el contador nativo del **backend Paper**.
 - TAB y cuerpo se actualizan con el mecanismo estándar de Paper. No existe TAB personalizada ni inyección visual por paquetes desde SBot.
 - `/sbot tp <nombre>`, `/sbot tpall`: teletransporte mediante Bukkit/NMS.
@@ -81,3 +81,14 @@ Si PlaceholderAPI está instalado: `%sbot_bots%` (registrados), `%sbot_pending%`
 - El método nativo de borrado se usa en lugar de únicamente invocar `kick()`, porque una conexión sintética puede no procesar una desconexión del mismo modo que un cliente real.
 - La creación es asíncrona para no bloquear el hilo principal esperando HTTPS; el registro NMS ocurre en el hilo principal del servidor.
 - El código utiliza la estructura de NMS 1.20.1; cualquier modificación en otra versión de Paper requiere revisión.
+
+## Correcciones 2.1.0
+
+- Registro **inmediato** de los jugadores; las consultas de skins ya no bloquean la aparición. Las skins obtenidas después de conectar se actualizan con paquetes nativos de información del jugador.
+- `FakeConnection` confirma los paquetes keepalive del servidor para evitar el timeout de clientes inexistentes.
+- El hilo principal revisa cada 2 segundos la presencia de los jugadores en `Bukkit.getOnlinePlayers()`, evita inactividad y restaura los que hayan salido inesperadamente. No interfiere con expulsiones de jugadores humanos.
+- Tickets de chunks activos por defecto mientras existe al menos un bot en cada chunk, para evitar que Paper descargue la zona cuando se marchan los jugadores reales.
+- `/sbot status` cuenta bots realmente registrados en Paper, no referencias NMS perdidas.
+- `config.yml`: `auto-reconnect-missing-bots`, `prevent-automatic-kicks`, `keep-bot-chunks-loaded`.
+
+**Nota:** En una red Velocity o BungeeCord, estos jugadores siguen siendo simulados en el backend Paper; las proxies pueden mostrar solo conexiones TCP reales. SBot no mantiene activo un proceso de servidor que un hosting apague.

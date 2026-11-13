@@ -37,6 +37,16 @@ final class SkinService {
         cache = YamlConfiguration.loadConfiguration(cacheFile);
     }
 
+    /** Pure local cache lookup; never waits for HTTPS on the server thread. */
+    Skin cached(String name) {
+        if (!plugin.getConfig().getBoolean("load-premium-skins", true)
+                || !plugin.getConfig().getBoolean("skin-cache", true)) return null;
+        String key = name.toLowerCase(Locale.ROOT);
+        String value = cache.getString(key + ".value");
+        String signature = cache.getString(key + ".signature");
+        return value == null || signature == null ? null : new Skin(value, signature);
+    }
+
     void load(String name, Consumer<Skin> callback) {
         if (!plugin.getConfig().getBoolean("load-premium-skins", true)) {
             callback.accept(null);

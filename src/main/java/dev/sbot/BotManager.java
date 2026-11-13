@@ -43,7 +43,7 @@ final class BotManager {
 
     private String key(String name) { return name.toLowerCase(Locale.ROOT); }
     int size() { return bots.size(); }
-    int activeCount() { return (int) bots.values().stream().filter(Bot::spawned).count(); }
+    int activeCount() { return (int) bots.values().stream().filter(NmsPlayerService::isRegistered).count(); }
     int pendingCount() { return size() - activeCount(); }
     int realOnlineCount() { return Math.max(0, Bukkit.getOnlinePlayers().size() - activeCount()); }
 
@@ -93,54 +93,108 @@ final class BotManager {
 
     private boolean add(String name, Location location) {
         if (!validName(name) || location.getWorld() == null || find(name) != null || nameTaken(name)) return false;
-        // Synthetic stable UUID: using the real premium UUID would impersonate its account/data.
         UUID uuid = UUID.nameUUIDFromBytes(("SBot:server-player:" + key(name)).getBytes(StandardCharsets.UTF_8));
         GameProfile profile = new GameProfile(uuid, name);
         Bot bot = new Bot(name, profile, location);
+
+        // Cached textures are applied before the instant join, without HTTPS latency.
+        SkinService.Skin cached = skins.cached(name);
+        if (cached != null) applySkin(bot, cached);
+
         bots.put(key(name), bot);
-        // Prepare the public signed texture BEFORE registration so the native
-        // player list broadcasts the correct skin to new and existing players.
+        try {
+            // Paper does not always keep fake-player chunks ticking by itself.
+            addTicket(bot.location);
+            NmsPlayerService.spawn(bot);
+            if (!NmsPlayerService.isRegistered(bot))
+                throw new IllegalStateException("El jugador no se registro en PlayerList");
+        } catch (Throwable error) {
+            plugin.getLogger().warning("Error al conectar inmediatamente a " + name + ": " + error);
+            try { NmsPlayerService.remove(bot); } catch (Throwable ignored) { }
+            removeTicket(bot.location);
+            bots.remove(key(name));
+            return false;
+        }
+
+        // A remote skin is optional: the player appears immediately with default
+        // skin and is refreshed only after the background HTTP request completes.
         skins.load(name, skin -> {
-            if (!plugin.isEnabled() || bots.get(key(name)) != bot) return;
-            if (skin != null) {
-                bot.profile.getProperties().removeAll("textures");
-                bot.profile.getProperties().put("textures", new Property("textures", skin.value(), skin.signature()));
-                bot.skinLoaded = true;
-            }
-            try {
-                // Do not consume the last human-reserved slots if someone joined
-                // while this bot's skin was downloading.
-                int reserved = Math.max(0, plugin.getConfig().getInt("minimum-free-slots", 2));
-                if (Bukkit.getOnlinePlayers().size() >= Bukkit.getMaxPlayers() - reserved) {
-                    plugin.getLogger().warning("SBot " + name + " cancelado: plazas reservadas para jugadores reales.");
-                    bots.remove(key(name));
-                    save();
-                    return;
+            if (!plugin.isEnabled() || bots.get(key(name)) != bot || skin == null) return;
+            boolean changed = applySkin(bot, skin);
+            if (changed) {
+                try {
+                    NmsPlayerService.refreshSkin(bot);
+                } catch (Throwable error) {
+                    plugin.getLogger().warning("No se pudo actualizar la skin de " + name + ": " + error);
                 }
-                if (nameTaken(name)) {
-                    plugin.getLogger().warning("SBot " + name + " omitido: otro jugador tomo su nombre.");
-                    bots.remove(key(name));
-                    save();
-                    return;
-                }
-                NmsPlayerService.spawn(bot);
-                if (!bot.spawned()) throw new IllegalStateException("Paper no registro el jugador");
-                addTicket(bot.location);
-            } catch (Throwable error) {
-                // A partial registration must not leave an online ghost entry.
-                plugin.getLogger().warning("Error al registrar SBot " + name + ": " + error);
-                try { NmsPlayerService.remove(bot); } catch (Throwable ignored) { }
-                bots.remove(key(name));
             }
-            save();
         });
         return true;
+    }
+
+    private boolean applySkin(Bot bot, SkinService.Skin skin) {
+        var entries = bot.profile.getProperties().get("textures");
+        boolean unchanged = entries.stream().anyMatch(property ->
+                property.getValue().equals(skin.value())
+                && skin.signature().equals(property.getSignature()));
+        if (unchanged) {
+            bot.skinLoaded = true;
+            return false;
+        }
+        bot.profile.getProperties().removeAll("textures");
+        bot.profile.getProperties().put("textures",
+                new Property("textures", skin.value(), skin.signature()));
+        bot.skinLoaded = true;
+        return true;
+    }
+
+    private final Map<String, Long> nextRecovery = new HashMap<>();
+    private final Map<String, Integer> recoveryFailures = new HashMap<>();
+
+    /** Runs only on the main thread. Keeps idle bots alive and repairs lost PlayerList entries. */
+    void maintain() {
+        long now = System.currentTimeMillis();
+        for (Bot bot : new ArrayList<>(bots.values())) {
+            if (NmsPlayerService.isRegistered(bot)) {
+                try {
+                    NmsPlayerService.tick(bot);
+                } catch (Throwable error) {
+                    plugin.getLogger().warning("SBot heartbeat " + bot.name + ": " + error);
+                }
+                recoveryFailures.remove(key(bot.name));
+                continue;
+            }
+            String id = key(bot.name);
+            if (now < nextRecovery.getOrDefault(id, 0L)) continue;
+            int minimumFree = Math.max(0, plugin.getConfig().getInt("minimum-free-slots", 2));
+            if (Bukkit.getOnlinePlayers().size() >= Bukkit.getMaxPlayers() - minimumFree) {
+                nextRecovery.put(id, now + 10000);
+                continue;
+            }
+            try {
+                plugin.getLogger().warning("SBot " + bot.name + " salio de PlayerList; restaurando...");
+                NmsPlayerService.remove(bot);
+                NmsPlayerService.spawn(bot);
+                if (!NmsPlayerService.isRegistered(bot))
+                    throw new IllegalStateException("No se pudo registrar en PlayerList");
+                recoveryFailures.remove(id);
+                nextRecovery.remove(id);
+                plugin.getLogger().info("SBot " + bot.name + " restaurado.");
+            } catch (Throwable error) {
+                int attempts = recoveryFailures.merge(id, 1, Integer::sum);
+                nextRecovery.put(id, now + (attempts <= 3 ? 5000 : 30000));
+                plugin.getLogger().warning("Fallo recuperando SBot " + bot.name
+                        + " (intento " + attempts + "): " + error);
+            }
+        }
     }
 
     boolean delete(String name) {
         Bot bot = find(name);
         if (bot == null) return false;
         bots.remove(key(name));
+        nextRecovery.remove(key(name));
+        recoveryFailures.remove(key(name));
         try {
             removeTicket(bot.location);
             NmsPlayerService.remove(bot);
@@ -163,6 +217,8 @@ final class BotManager {
             }
         }
         tickets.clear();
+        nextRecovery.clear();
+        recoveryFailures.clear();
         if (persist) save();
     }
 
@@ -171,7 +227,7 @@ final class BotManager {
         if (bot == null || destination.getWorld() == null) return false;
         Location previous = bot.location.clone();
         if (!NmsPlayerService.teleport(bot, destination)) return false;
-        if (bot.spawned()) {
+        if (NmsPlayerService.isRegistered(bot)) {
             removeTicket(previous);
             addTicket(bot.location);
         }
@@ -215,7 +271,7 @@ final class BotManager {
     }
 
     private void addTicket(Location loc) {
-        if (!plugin.getConfig().getBoolean("keep-bot-chunks-loaded", false)) return;
+        if (!plugin.getConfig().getBoolean("keep-bot-chunks-loaded", true)) return;
         ChunkKey key = chunkKey(loc);
         if (tickets.merge(key, 1, Integer::sum) == 1) {
             key.world().addPluginChunkTicket(key.x(), key.z(), plugin);
