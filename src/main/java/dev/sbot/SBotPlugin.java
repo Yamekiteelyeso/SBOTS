@@ -1,0 +1,96 @@
+package dev.sbot;
+
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.command.PluginCommand;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerLoginEvent;
+import org.bukkit.plugin.java.JavaPlugin;
+
+import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
+
+/** SBot: native server-list simulated players for Paper 1.20.1. */
+public final class SBotPlugin extends JavaPlugin implements Listener {
+    private final Map<String, String> messages = new HashMap<>();
+    private BotManager botManager;
+    private SkinService skinService;
+
+    @Override
+    public void onEnable() {
+        if (!Bukkit.getBukkitVersion().startsWith("1.20.1-")) {
+            getLogger().severe("SBot requiere exactamente Paper 1.20.1: " + Bukkit.getBukkitVersion());
+            Bukkit.getPluginManager().disablePlugin(this);
+            return;
+        }
+        saveDefaultConfig();
+        loadMessages();
+        skinService = new SkinService(this);
+        botManager = new BotManager(this, skinService);
+
+        SBotCommand command = new SBotCommand(this, botManager);
+        PluginCommand registered = getCommand("sbot");
+        if (registered == null) throw new IllegalStateException("Falta /sbot en plugin.yml");
+        registered.setExecutor(command);
+        registered.setTabCompleter(command);
+        Bukkit.getPluginManager().registerEvents(this, this);
+
+        if (Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")) {
+            try {
+                new SBotExpansion(botManager).register();
+            } catch (Throwable ex) {
+                getLogger().warning("No se pudo registrar PlaceholderAPI: " + ex.getMessage());
+            }
+        }
+        if (getConfig().getBoolean("restore-on-startup", true)) {
+            // Worlds and other plugin managers are ready after the initial enable phase.
+            Bukkit.getScheduler().runTaskLater(this, botManager::restore, 20L);
+        }
+        getLogger().info("SBot iniciado con jugadores registrados por NMS (sin TAB falso independiente).");
+    }
+
+    @Override
+    public void onDisable() {
+        if (botManager != null) {
+            botManager.save();
+            botManager.clear(false);
+        }
+        if (skinService != null) skinService.close();
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onLogin(PlayerLoginEvent event) {
+        if (botManager == null || botManager.isBot(event.getPlayer())) return;
+        // A genuine player always takes precedence when using the same username.
+        Bot fake = botManager.find(event.getPlayer().getName());
+        if (fake != null) botManager.delete(fake.name);
+    }
+
+    void loadMessages() {
+        File file = new File(getDataFolder(), "messages.yml");
+        if (!file.exists()) saveResource("messages.yml", false);
+        YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+        messages.clear();
+        for (String key : yaml.getKeys(true)) {
+            if (yaml.isString(key)) messages.put(key, yaml.getString(key, ""));
+        }
+    }
+
+    String msg(String key, String... pairs) {
+        String raw = messages.getOrDefault("prefix", "&8[&bSBot&8] &7")
+                + messages.getOrDefault(key, key);
+        for (int i = 0; i + 1 < pairs.length; i += 2) {
+            raw = raw.replace("{" + pairs[i] + "}", pairs[i + 1]);
+        }
+        return ChatColor.translateAlternateColorCodes('&', raw);
+    }
+
+    void reloadSBot() {
+        reloadConfig();
+        loadMessages();
+    }
+}

@@ -1,0 +1,44 @@
+# SBot 2.0.0 - jugadores simulados REGISTRADOS en el PlayerList de Paper.
+# No se crean conexiones TCP reales ni se autentican cuentas Microsoft.
+max-bots: 40
+max-create-per-command: 20
+# Los bots consumen puestos del contador: reserva huecos para personas reales.
+minimum-free-slots: 2
+restore-on-startup: true
+load-premium-skins: true
+skin-cache: true
+spawn-spacing-blocks: 2.0
+# Solo mientras el proceso Paper esta encendido.
+keep-bot-chunks-loaded: false
+# Usa nombres publicos para cargar skins. Un bot NO adquiere el UUID premium real.
+# Si un usuario autentico entra con ese nombre, SBot le cede el nombre.
+premium-name-pool:
+  - Notch
+  - jeb_
+  - Dinnerbone
+  - Grumm
+  - Dream
+  - Sapnap
+  - GeorgeNotFound
+  - Technoblade
+  - DanTDM
+  - Grian
+  - MumboJumbo
+  - EthosLab
+  - Iskall85
+  - ImpulseSV
+  - BdoubleO100
+  - Xisuma
+  - Purpled
+  - Fruitberries
+  - TapL
+  - Tubbo
+  - Philza
+  - Skeppy
+  - Punz
+  - Antfrost
+  - Ranboo
+  - Eret
+  - Fundy
+  - CaptainSparklez
+  - SmallishBeans

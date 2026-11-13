@@ -1,0 +1,16 @@
+name: SBot
+version: '2.0.0'
+main: dev.sbot.SBotPlugin
+api-version: '1.20'
+author: SBot
+softdepend: [PlaceholderAPI]
+description: Jugadores simulados registrados en PlayerList para Paper 1.20.1
+commands:
+  sbot:
+    description: Gestion de jugadores simulados de SBot
+    usage: /sbot
+    permission: sbot.admin
+permissions:
+  sbot.admin:
+    description: Administrar jugadores SBot
+    default: op
