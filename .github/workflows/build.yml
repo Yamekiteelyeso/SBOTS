@@ -1,0 +1,53 @@
+name: Build SBot (Paper 1.20.1)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Compile and package JAR
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      - name: Build reobfuscated Paper plugin
+        run: gradle --no-daemon clean reobfJar --stacktrace
+
+      - name: Prepare plugin JAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          test -s build/libs/SBot-2.0.0.jar
+          cp build/libs/SBot-2.0.0.jar dist/SBot-2.0.0-Paper-1.20.1.jar
+          echo "Generated plugin artifact:"
+          ls -lh dist/
+
+      - name: Upload compiled JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: SBot-Paper-1.20.1
+          path: dist/SBot-2.0.0-Paper-1.20.1.jar
+          if-no-files-found: error
+          retention-days: 30
