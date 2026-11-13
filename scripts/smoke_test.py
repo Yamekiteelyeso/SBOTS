@@ -21,7 +21,7 @@ def exact(sock, size):
 
 def rcon(command):
     def send(sock, rid, typ, value):
-        payload = struct.pack("<ii", rid, typ) + value.encode() + b"\\x00\\x00"
+        payload = struct.pack("<ii", rid, typ) + value.encode() + b"\x00\x00"
         sock.sendall(struct.pack("<i", len(payload)) + payload)
 
     def recv(sock):
@@ -30,7 +30,7 @@ def rcon(command):
             raise RuntimeError("Invalid RCON packet")
         body = exact(sock, size)
         rid, typ = struct.unpack("<ii", body[:8])
-        return rid, typ, body[8:].rstrip(b"\\x00").decode(errors="replace")
+        return rid, typ, body[8:].rstrip(b"\x00").decode(errors="replace")
 
     with socket.create_connection(("127.0.0.1", 25575), timeout=6) as sock:
         sock.settimeout(6)
@@ -54,7 +54,7 @@ def rcon(command):
 def print_logs():
     path = SERVER / "logs/latest.log"
     if path.exists():
-        print("\\n==== Paper latest.log ====\\n" + "\\n".join(path.read_text(errors="replace").splitlines()[-85:]), flush=True)
+        print("\n==== Paper latest.log ====\n" + "\n".join(path.read_text(errors="replace").splitlines()[-85:]), flush=True)
 
 
 def main():
