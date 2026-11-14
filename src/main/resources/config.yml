@@ -1,4 +1,4 @@
-# SBot 2.0.0 - jugadores simulados REGISTRADOS en el PlayerList de Paper.
+# SBot 2.2.0 - jugadores simulados en PlayerList de Paper.
 # No se crean conexiones TCP reales ni se autentican cuentas Microsoft.
 max-bots: 40
 max-create-per-command: 20
@@ -14,35 +14,18 @@ keep-bot-chunks-loaded: true
 prevent-automatic-kicks: true
 # Un watchdog comprueba los jugadores cada 2 segundos y restaura entradas perdidas.
 auto-reconnect-missing-bots: true
-# Usa nombres publicos para cargar skins. Un bot NO adquiere el UUID premium real.
-# Si un usuario autentico entra con ese nombre, SBot le cede el nombre.
-premium-name-pool:
-  - Notch
-  - jeb_
-  - Dinnerbone
-  - Grumm
-  - Dream
-  - Sapnap
-  - GeorgeNotFound
-  - Technoblade
-  - DanTDM
-  - Grian
-  - MumboJumbo
-  - EthosLab
-  - Iskall85
-  - ImpulseSV
-  - BdoubleO100
+# Los usernames son generados, no copiados de cuentas premium conocidas.
+# Ejemplos: Zelrox_4382, Kirozen_2377, Nexovia_8172
+name-prefix: ""
+# Las skins públicas son independientes de los nombres visibles.
+# Estos nombres SOLO sirven para consultar las texturas en Mojang.
+# Puedes usar tus propias cuentas premium como fuente de texturas.
+skin-source-pool:
   - Xisuma
-  - Purpled
-  - Fruitberries
-  - TapL
-  - Tubbo
-  - Philza
-  - Skeppy
-  - Punz
-  - Antfrost
-  - Ranboo
-  - Eret
-  - Fundy
-  - CaptainSparklez
-  - SmallishBeans
+  - jeb_
+  - Iskall85
+  - Grian
+  - Notch
+  - EthosLab
+  - MumboJumbo
+  - Dinnerbone

@@ -8,14 +8,16 @@ import org.bukkit.Location;
 final class Bot {
     final String name;
     final GameProfile profile;
+    final String skinSource;
     Location location;
     ServerPlayer handle; // null while the skin is being fetched, or after removal
     FakeConnection connection;
     boolean skinLoaded;
 
-    Bot(String name, GameProfile profile, Location location) {
+    Bot(String name, GameProfile profile, Location location, String skinSource) {
         this.name = name;
         this.profile = profile;
+        this.skinSource = skinSource;
         this.location = location.clone();
     }
 

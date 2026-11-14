@@ -15,7 +15,7 @@ import java.util.Locale;
 import java.util.stream.Collectors;
 
 final class SBotCommand implements CommandExecutor, TabCompleter {
-    private static final List<String> ROOTS = List.of("create", "tp", "tpall", "delete", "list", "info", "status", "reload");
+    private static final List<String> ROOTS = List.of("create", "createat", "tp", "tpall", "delete", "list", "info", "status", "reload");
     private final SBotPlugin plugin;
     private final BotManager manager;
 
@@ -64,6 +64,37 @@ final class SBotCommand implements CommandExecutor, TabCompleter {
                             "amount", String.valueOf(created)));
                 }
             }
+            case "createat" -> {
+                // Console-friendly variant used by automation and administrators.
+                if (args.length != 6) return usage(sender);
+                try {
+                    int amount = Integer.parseInt(args[1]);
+                    int max = Math.max(1, plugin.getConfig().getInt("max-create-per-command", 20));
+                    if (amount < 1 || amount > max) {
+                        sender.sendMessage(plugin.msg("create-limit", "max", String.valueOf(max)));
+                        return true;
+                    }
+                    org.bukkit.World world = org.bukkit.Bukkit.getWorld(args[2]);
+                    if (world == null) {
+                        sender.sendMessage("SBot: Mundo no encontrado.");
+                        return true;
+                    }
+                    double x = Double.parseDouble(args[3]);
+                    double y = Double.parseDouble(args[4]);
+                    double z = Double.parseDouble(args[5]);
+                    if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)
+                            || Math.abs(x) > 29999984 || Math.abs(z) > 29999984
+                            || y < world.getMinHeight() || y > world.getMaxHeight()) {
+                        sender.sendMessage(plugin.msg("invalid-number"));
+                        return true;
+                    }
+                    int created = manager.createMany(amount, new org.bukkit.Location(world, x, y, z));
+                    sender.sendMessage(plugin.msg(created < amount ? "created-partial" : "created",
+                            "amount", String.valueOf(created)));
+                } catch (NumberFormatException error) {
+                    sender.sendMessage(plugin.msg("invalid-number"));
+                }
+            }
             case "tpall" -> {
                 if (!(sender instanceof Player player)) return playerOnly(sender);
                 if (args.length != 1) return usage(sender);
@@ -105,14 +136,20 @@ final class SBotCommand implements CommandExecutor, TabCompleter {
                 if (args.length != 2) return usage(sender);
                 Bot bot = manager.find(args[1]);
                 if (bot == null) sender.sendMessage(plugin.msg("not-found", "name", args[1]));
-                else sender.sendMessage(plugin.msg("info",
-                        "name", bot.name,
-                        "world", bot.location.getWorld().getName(),
-                        "x", String.valueOf(bot.location.getBlockX()),
-                        "y", String.valueOf(bot.location.getBlockY()),
-                        "z", String.valueOf(bot.location.getBlockZ()),
-                        "skin", bot.skinLoaded ? "Premium" : "Predeterminada / cargando",
-                        "state", bot.spawned() ? "Conectado" : "Cargando"));
+                else {
+                    org.bukkit.Location actualLocation =
+                            NmsPlayerService.isRegistered(bot)
+                                    ? bot.handle.getBukkitEntity().getLocation()
+                                    : bot.location;
+                    sender.sendMessage(plugin.msg("info",
+                            "name", bot.name,
+                            "world", actualLocation.getWorld().getName(),
+                            "x", String.valueOf(actualLocation.getBlockX()),
+                            "y", String.valueOf(actualLocation.getBlockY()),
+                            "z", String.valueOf(actualLocation.getBlockZ()),
+                            "skin", bot.skinLoaded ? "Premium" : "Predeterminada / cargando",
+                            "state", NmsPlayerService.isRegistered(bot) ? "Conectado" : "Cargando"));
+                }
             }
             case "reload" -> {
                 if (args.length != 1) return usage(sender);
@@ -142,7 +179,7 @@ final class SBotCommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) options.addAll(ROOTS);
         else if (args.length == 2) {
             switch (args[0].toLowerCase(Locale.ROOT)) {
-                case "create" -> options.addAll(Arrays.asList("1", "5", "10", "20"));
+                case "create", "createat" -> options.addAll(Arrays.asList("1", "5", "10", "20"));
                 case "tp", "info" -> options.addAll(manager.names());
                 case "delete" -> {
                     options.add("allbots");

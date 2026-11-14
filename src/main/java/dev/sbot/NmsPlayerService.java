@@ -11,6 +11,7 @@ import org.bukkit.craftbukkit.v1_20_R1.entity.CraftPlayer;
 import org.bukkit.craftbukkit.v1_20_R1.CraftServer;
 import org.bukkit.craftbukkit.v1_20_R1.CraftWorld;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerTeleportEvent;
 
 import java.util.List;
 
@@ -32,14 +33,15 @@ final class NmsPlayerService {
                 && online == bot.handle.getBukkitEntity();
     }
 
+    /** Native login may overwrite the pre-join position with the default world spawn. */
     static void spawn(Bot bot) {
         if (isRegistered(bot) || bot.location.getWorld() == null) return;
-        MinecraftServer server = server();
-        var level = ((CraftWorld) bot.location.getWorld()).getHandle();
-        ServerPlayer handle = new ServerPlayer(server, level, bot.profile);
-        Location position = bot.location.clone();
-        handle.absMoveTo(position.getX(), position.getY(), position.getZ(),
-                position.getYaw(), position.getPitch());
+        MinecraftServer minecraft = server();
+        Location requested = bot.location.clone();
+        var level = ((CraftWorld) requested.getWorld()).getHandle();
+        ServerPlayer handle = new ServerPlayer(minecraft, level, bot.profile);
+        handle.absMoveTo(requested.getX(), requested.getY(), requested.getZ(),
+                requested.getYaw(), requested.getPitch());
         handle.setDeltaMovement(Vec3.ZERO);
         handle.setNoGravity(true);
         handle.setInvulnerable(true);
@@ -48,19 +50,42 @@ final class NmsPlayerService {
         FakeConnection connection = new FakeConnection();
         bot.handle = handle;
         bot.connection = connection;
-        // This calls the native login entry path: same backend online list as humans.
-        server.getPlayerList().placeNewPlayer(connection, handle);
-
-        // Paper has installed the session listener as part of placeNewPlayer.
-        // Attach it explicitly for keepalive acknowledgements.
+        minecraft.getPlayerList().placeNewPlayer(connection, handle);
         connection.attach(handle.connection);
+
         Player bukkit = handle.getBukkitEntity();
         bukkit.setSleepingIgnored(true);
         bukkit.setCollidable(false);
-        if (!bukkit.getWorld().equals(position.getWorld())
-                || bukkit.getLocation().distanceSquared(position) > 0.01) {
-            bukkit.teleport(position);
+        // Reposition AFTER registration: placeNewPlayer may reset the NMS
+        // coordinates to world spawn. Unlike old code, teleport failures are
+        // not silently ignored.
+        enforcePosition(bot);
+    }
+
+    /** Keep the server-side entity at the requested location, not world spawn. */
+    static boolean enforcePosition(Bot bot) {
+        if (!isRegistered(bot) || bot.location.getWorld() == null) return false;
+        Location target = bot.location.clone();
+        Player player = bot.handle.getBukkitEntity();
+        Location actual = player.getLocation();
+        if (actual.getWorld().equals(target.getWorld())
+                && actual.distanceSquared(target) < 0.04
+                && Math.abs(actual.getYaw() - target.getYaw()) < 0.1
+                && Math.abs(actual.getPitch() - target.getPitch()) < 0.1) return true;
+
+        if (!actual.getWorld().equals(target.getWorld())) {
+            // Bukkit handles world changes; a native connection teleport
+            // alone cannot change dimensions.
+            if (!player.teleport(target, PlayerTeleportEvent.TeleportCause.PLUGIN)) return false;
+        } else {
+            // NMS owns this player's location: teleport the session itself to
+            // force Paper to update the entity AND its chunk tracking.
+            bot.handle.connection.teleport(target.getX(), target.getY(), target.getZ(),
+                    target.getYaw(), target.getPitch());
         }
+        Location moved = player.getLocation();
+        return moved.getWorld().equals(target.getWorld())
+                && moved.distanceSquared(target) < 0.04;
     }
 
     static boolean teleport(Bot bot, Location destination) {
@@ -69,13 +94,15 @@ final class NmsPlayerService {
             bot.location = destination.clone();
             return true;
         }
-        Player player = bot.handle.getBukkitEntity();
-        boolean done = player.teleport(destination);
-        if (done) {
-            bot.location = player.getLocation();
+        Location previous = bot.location.clone();
+        bot.location = destination.clone();
+        boolean moved = enforcePosition(bot);
+        if (moved) {
             bot.handle.setDeltaMovement(Vec3.ZERO);
+            return true;
         }
-        return done;
+        bot.location = previous;
+        return false;
     }
 
     static void refreshSkin(Bot bot) {

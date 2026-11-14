@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Paper 1.20.1 smoke test: bot stays registered after the keepalive interval."""
 import socket
+import re
 import struct
 import subprocess
 import time
@@ -79,14 +80,36 @@ def main():
             time.sleep(2)
         else:
             raise AssertionError("Bot never became a real server-list entry")
+        # Create a randomly named player at a known location via the same
+        # manager used by /sbot create (console variant for unattended CI).
+        created = rcon("sbot createat 1 world 64.5 90.0 -32.5")
+        print("Create at requested position: " + created, flush=True)
+        assert "1" in created, "Bot creation did not report one player"
+        roster = rcon("sbot list")
+        print("SBot roster: " + roster, flush=True)
+        matched = re.findall(r"[A-Za-z][A-Za-z0-9_]{2,15}_\d{4}", roster)
+        assert len(matched) == 1, f"Expected one generated username, got {matched!r}"
+        name = matched[0]
+        assert name not in ("Notch", "Dream", "Grian", "jeb_")
+        info = rcon(f"sbot info {name}")
+        print("Actual bot position: " + info, flush=True)
+        assert re.search(r"64,\s*90,\s*-33", re.sub(r"§.", "", info)), (
+            f"Bot spawned in the wrong place: {info}"
+        )
         time.sleep(65)
         listing = rcon("list")
         status = rcon("sbot status")
+        later_info = rcon(f"sbot info {name}")
+        print("Actual bot position after 65 seconds: " + later_info, flush=True)
+        assert re.search(r"64,\s*90,\s*-33", re.sub(r"§.", "", later_info)), (
+            f"Bot drifted from requested location: {later_info}"
+        )
+        assert name in listing, f"Generated bot missing after 65 seconds: {listing}"
         print("After 65 seconds: " + listing, flush=True)
         print("SBot status: " + status, flush=True)
         assert "SBotTester" in listing, "Bot disappeared!"
         assert "SBot" in status, "/sbot status was not available"
-        print("PASS: bot present after 65 seconds with 0 actual clients", flush=True)
+        print("PASS: both native players stayed connected; random name and requested position verified", flush=True)
     finally:
         print_logs()
         process.terminate()

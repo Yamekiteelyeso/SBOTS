@@ -1,4 +1,4 @@
-# SBot 2.1.0 — jugadores simulados para Paper 1.20.1
+# SBot 2.2.0 — jugadores simulados para Paper 1.20.1
 
 **Objetivo:** registrar jugadores simulados dentro del `PlayerList` nativo de Paper. No son NPCs mostrados únicamente por paquetes, ni hay una TAB propia. Están representados por objetos NMS `ServerPlayer` y conexiones internas sin un cliente TCP real.
 
@@ -82,7 +82,7 @@ Si PlaceholderAPI está instalado: `%sbot_bots%` (registrados), `%sbot_pending%`
 - La creación es asíncrona para no bloquear el hilo principal esperando HTTPS; el registro NMS ocurre en el hilo principal del servidor.
 - El código utiliza la estructura de NMS 1.20.1; cualquier modificación en otra versión de Paper requiere revisión.
 
-## Correcciones 2.1.0
+## Correcciones 2.2.0
 
 - Registro **inmediato** de los jugadores; las consultas de skins ya no bloquean la aparición. Las skins obtenidas después de conectar se actualizan con paquetes nativos de información del jugador.
 - `FakeConnection` confirma los paquetes keepalive del servidor para evitar el timeout de clientes inexistentes.
@@ -92,3 +92,16 @@ Si PlaceholderAPI está instalado: `%sbot_bots%` (registrados), `%sbot_pending%`
 - `config.yml`: `auto-reconnect-missing-bots`, `prevent-automatic-kicks`, `keep-bot-chunks-loaded`.
 
 **Nota:** En una red Velocity o BungeeCord, estos jugadores siguen siendo simulados en el backend Paper; las proxies pueden mostrar solo conexiones TCP reales. SBot no mantiene activo un proceso de servidor que un hosting apague.
+
+
+## Correcciones 2.2.0 — aparición y nombres
+
+- `/sbot create <cantidad>`: nombres originales generados aleatoriamente (ej. `Vexrox_4382`). Ya no usa identidades públicas conocidas en TAB, `/list` ni el scoreboard.
+- `/sbot createat <cantidad> <mundo> <x> <y> <z>`: variante ejecutable desde consola para pruebas o administración; las coordenadas introducidas son el centro de la formación.
+- `/sbot info <nombre>` ahora muestra la ubicación real del jugador registrado, no solamente las coordenadas guardadas en `bots.yml`.
+- Corrección de posición NMS: después de `placeNewPlayer` el plugin ajusta la posición real. Reintenta en el siguiente tick y el watchdog la comprueba periódicamente.
+- Los nombres ya guardados que pertenecían a la lista anterior de famosos se sustituyen por identidades generadas durante la restauración.
+- `skin-source-pool` únicamente contiene nombres de **origen para descargar texturas**, jamás se muestra como el nombre del bot. Puede quedar vacío para usar skins predeterminadas.
+- Los bots siguen siendo jugadores simulados; las cuentas premium que se usan como fuente de skin no se autentican.
+
+La prueba CI incluye ahora una creación con `/sbot createat`, verificación de nombre aleatorio y comprobación de las coordenadas reales de `/sbot info` antes y después de más de un minuto sin clientes conectados.

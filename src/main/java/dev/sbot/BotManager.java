@@ -61,23 +61,37 @@ final class BotManager {
     }
 
     int createMany(int requested, Location location) {
-        if (location.getWorld() == null) return 0;
-        // Reserve server slots for real players. Fake players really take slots.
+        if (location.getWorld() == null || requested <= 0) return 0;
         int minFree = Math.max(0, plugin.getConfig().getInt("minimum-free-slots", 2));
         int remainingSlots = Math.max(0, Bukkit.getMaxPlayers() - Bukkit.getOnlinePlayers().size()
                 - pendingCount() - minFree);
         int maximum = Math.max(0, plugin.getConfig().getInt("max-bots", 40) - size());
         int target = Math.min(requested, Math.min(maximum, remainingSlots));
-        List<String> pool = new ArrayList<>(plugin.getConfig().getStringList("premium-name-pool"));
-        Collections.shuffle(pool, random);
+
         int created = 0;
-        for (String candidate : pool) {
-            if (created >= target) break;
-            if (!validName(candidate) || find(candidate) != null || nameTaken(candidate)) continue;
-            if (add(candidate, spread(location, created, target))) created++;
+        for (int index = 0; index < target; index++) {
+            String candidate = nextUniqueName();
+            if (candidate == null) break;
+            Location at = spread(location, index, target);
+            if (add(candidate, at, randomSkinSource())) created++;
         }
         if (created > 0) save();
         return created;
+    }
+
+    private String nextUniqueName() {
+        String prefix = plugin.getConfig().getString("name-prefix", "");
+        for (int tries = 0; tries < 500; tries++) {
+            String name = NameGenerator.generate(random, prefix);
+            if (validName(name) && find(name) == null && !nameTaken(name)) return name;
+        }
+        return null;
+    }
+
+    private String randomSkinSource() {
+        List<String> sources = plugin.getConfig().getStringList("skin-source-pool");
+        if (sources.isEmpty()) return "";
+        return sources.get(random.nextInt(sources.size()));
     }
 
     private boolean validName(String name) {
@@ -91,14 +105,14 @@ final class BotManager {
         return false;
     }
 
-    private boolean add(String name, Location location) {
+    private boolean add(String name, Location location, String skinSource) {
         if (!validName(name) || location.getWorld() == null || find(name) != null || nameTaken(name)) return false;
         UUID uuid = UUID.nameUUIDFromBytes(("SBot:server-player:" + key(name)).getBytes(StandardCharsets.UTF_8));
         GameProfile profile = new GameProfile(uuid, name);
-        Bot bot = new Bot(name, profile, location);
+        Bot bot = new Bot(name, profile, location, skinSource);
 
         // Cached textures are applied before the instant join, without HTTPS latency.
-        SkinService.Skin cached = skins.cached(name);
+        SkinService.Skin cached = skinSource.isEmpty() ? null : skins.cached(skinSource);
         if (cached != null) applySkin(bot, cached);
 
         bots.put(key(name), bot);
@@ -118,7 +132,7 @@ final class BotManager {
 
         // A remote skin is optional: the player appears immediately with default
         // skin and is refreshed only after the background HTTP request completes.
-        skins.load(name, skin -> {
+        if (!skinSource.isEmpty()) skins.load(skinSource, skin -> {
             if (!plugin.isEnabled() || bots.get(key(name)) != bot || skin == null) return;
             boolean changed = applySkin(bot, skin);
             if (changed) {
@@ -129,6 +143,14 @@ final class BotManager {
                 }
             }
         });
+        // The next tick is a second line of defense against plugins that alter
+        // spawn location while the PlayerJoinEvent is being handled.
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (bots.get(key(bot.name)) != bot) return;
+            if (!NmsPlayerService.enforcePosition(bot)) {
+                plugin.getLogger().warning("SBot " + bot.name + ": ubicacion no confirmada, se reintentara.");
+            }
+        }, 2L);
         return true;
     }
 
@@ -162,6 +184,9 @@ final class BotManager {
                     plugin.getLogger().warning("SBot heartbeat " + bot.name + ": " + error);
                 }
                 recoveryFailures.remove(key(bot.name));
+                if (!NmsPlayerService.enforcePosition(bot)) {
+                    plugin.getLogger().warning("SBot " + bot.name + " descolocado: pos se reintentara.");
+                }
                 continue;
             }
             String id = key(bot.name);
@@ -295,6 +320,7 @@ final class BotManager {
             Location loc = bot.location;
             if (loc.getWorld() == null) continue;
             data.set(root + "world", loc.getWorld().getName());
+            data.set(root + "skinSource", bot.skinSource);
             data.set(root + "x", loc.getX());
             data.set(root + "y", loc.getY());
             data.set(root + "z", loc.getZ());
@@ -308,27 +334,52 @@ final class BotManager {
         }
     }
 
+    /** Rename only identities created from the removed 2.0.0 celebrity roster. */
+    private boolean isLegacyCelebrityName(String name) {
+        if (plugin.getConfig().getStringList("premium-name-pool").stream()
+                .anyMatch(old -> old.equalsIgnoreCase(name))) return true;
+        return LEGACY_NAMES.stream().anyMatch(old -> old.equalsIgnoreCase(name));
+    }
+
+    private static final java.util.Set<String> LEGACY_NAMES = java.util.Set.of(
+            "Notch", "jeb_", "Dinnerbone", "Grumm", "Dream", "Sapnap", "GeorgeNotFound",
+            "Technoblade", "DanTDM", "Grian", "MumboJumbo", "EthosLab", "Iskall85",
+            "ImpulseSV", "BdoubleO100", "Xisuma", "Purpled", "Fruitberries", "TapL",
+            "Tubbo", "Philza", "Skeppy", "Punz", "Antfrost", "Ranboo", "Eret", "Fundy",
+            "CaptainSparklez", "SmallishBeans"
+    );
+
     void restore() {
         if (!file.exists()) return;
         YamlConfiguration data = YamlConfiguration.loadConfiguration(file);
         ConfigurationSection section = data.getConfigurationSection("bots");
         if (section == null) return;
         int count = 0;
+        int migrated = 0;
         int max = Math.max(0, Math.min(plugin.getConfig().getInt("max-bots", 40),
                 Bukkit.getMaxPlayers() - Math.max(0, plugin.getConfig().getInt("minimum-free-slots", 2))));
-        for (String name : section.getKeys(false)) {
+        for (String savedName : section.getKeys(false)) {
             if (count >= max) break;
-            String root = "bots." + name + ".";
+            String root = "bots." + savedName + ".";
             World world = Bukkit.getWorld(data.getString(root + "world", ""));
             if (world == null) {
-                plugin.getLogger().warning("SBot " + name + ": mundo inexistente, omitido.");
+                plugin.getLogger().warning("SBot " + savedName + ": mundo inexistente, omitido.");
                 continue;
             }
             Location loc = new Location(world, data.getDouble(root + "x"), data.getDouble(root + "y"),
                     data.getDouble(root + "z"), (float) data.getDouble(root + "yaw"),
                     (float) data.getDouble(root + "pitch"));
-            if (validName(name) && !nameTaken(name) && add(name, loc)) count++;
+            String name = savedName;
+            if (isLegacyCelebrityName(savedName)) {
+                name = nextUniqueName();
+                if (name == null) continue;
+                migrated++;
+            }
+            String skinSource = data.getString(root + "skinSource", "");
+            if (skinSource.isEmpty()) skinSource = isLegacyCelebrityName(savedName) ? savedName : randomSkinSource();
+            if (validName(name) && !nameTaken(name) && add(name, loc, skinSource)) count++;
         }
-        plugin.getLogger().info("SBot restaurando " + count + " jugadores simulados.");
+        save();
+        plugin.getLogger().info("SBot restauró " + count + " jugadores. Nombres antiguos migrados: " + migrated);
     }
 }
