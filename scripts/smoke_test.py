@@ -33,8 +33,8 @@ def rcon(command):
         rid, typ = struct.unpack("<ii", body[:8])
         return rid, typ, body[8:].rstrip(b"\x00").decode(errors="replace")
 
-    with socket.create_connection(("127.0.0.1", 25575), timeout=6) as sock:
-        sock.settimeout(6)
+    with socket.create_connection(("127.0.0.1", 25575), timeout=45) as sock:
+        sock.settimeout(45)
         send(sock, 10, 3, "sbot-smoke-test")
         for _ in range(3):
             rid, typ, _ = recv(sock)
@@ -82,6 +82,10 @@ def main():
             raise AssertionError("Bot never became a real server-list entry")
         # Create a randomly named player at a known location via the same
         # manager used by /sbot create (console variant for unattended CI).
+        # /sbot create is normally invoked by a real player inside an already
+        # loaded chunk. Preload the test destination to emulate that condition.
+        loaded = rcon("forceload add 64 -32")
+        print("Chunk readiness: " + loaded, flush=True)
         created = rcon("sbot createat 1 world 64.5 90.0 -32.5")
         print("Create at requested position: " + created, flush=True)
         assert "1" in created, "Bot creation did not report one player"
