@@ -93,7 +93,7 @@ def main():
         assert name not in ("Notch", "Dream", "Grian", "jeb_")
         def check_position(line):
             stripped = re.sub(r"§.", "", line)
-            match = re.search(r"Posición:\s*(-?\d+(?:\\.\d+)?),\s*(-?\d+(?:\\.\d+)?),\s*(-?\d+(?:\\.\d+)?)", stripped)
+            match = re.search(r"Posición:\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)", stripped)
             assert match, f"Could not parse player position: {line}"
             actual = tuple(float(v) for v in match.groups())
             desired = (64.5, 90.0, -32.5)
