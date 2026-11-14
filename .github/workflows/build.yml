@@ -91,6 +91,10 @@ jobs:
           server-port=25566
           online-mode=false
           max-players=20
+          allow-flight=true
+          view-distance=5
+          simulation-distance=4
+          level-type=minecraft:flat
           level-name=world
           enable-rcon=true
           rcon.port=25575
