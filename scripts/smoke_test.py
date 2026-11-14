@@ -53,6 +53,62 @@ def rcon(command):
         raise RuntimeError("No command response")
 
 
+
+def mc_varint(value):
+    result = bytearray()
+    value &= 0xFFFFFFFF
+    while True:
+        b = value & 0x7F
+        value >>= 7
+        result.append(b | (0x80 if value else 0))
+        if value == 0:
+            return bytes(result)
+
+
+def mc_readvarint(sock):
+    result = 0
+    for shift in range(0, 35, 7):
+        value = exact(sock, 1)[0]
+        result |= (value & 0x7F) << shift
+        if not value & 0x80:
+            return result
+    raise RuntimeError("Minecraft VarInt too long")
+
+
+def mc_status():
+    """Query the exact TCP ping JSON used by Minecraft's multiplayer screen."""
+    with socket.create_connection(("127.0.0.1", 25566), timeout=15) as sock:
+        sock.settimeout(15)
+        host = b"localhost"
+        handshake = (
+            mc_varint(763) + mc_varint(len(host)) + host
+            + struct.pack(">H", 25566) + mc_varint(1)
+        )
+        sock.sendall(mc_varint(len(handshake) + 1) + b"\x00" + handshake)
+        sock.sendall(b"\x01\x00")
+        size = mc_readvarint(sock)
+        assert size > 2, f"Unexpected ping response length {size}"
+        packet_id = mc_readvarint(sock)
+        assert packet_id == 0, f"Unexpected ping packet ID {packet_id}"
+        text_length = mc_readvarint(sock)
+        return json.loads(exact(sock, text_length).decode("utf-8"))
+
+
+def check_ping(expected_online, expected_bots):
+    answer = mc_status()
+    players = answer.get("players", {})
+    sample = players.get("sample", [])
+    names = [entry.get("name", "") for entry in sample]
+    print("MULTIPLAYER LIST PING:", players.get("online"), "/", players.get("max"),
+          "names:", names, flush=True)
+    assert players.get("online") == expected_online, (
+        f"Expected {expected_online} online in ping; got {players}"
+    )
+    for name in expected_bots:
+        assert name in names, f"Bot {name} missing from multiplayer hover names {names}"
+    assert "Anonymous Player" not in names, f"Anonymous player leaked into multiplayer hover {names}"
+
+
 def print_logs():
     path = SERVER / "logs/latest.log"
     if path.exists():
@@ -77,6 +133,8 @@ def main():
                 result = rcon("list")
                 if "SBotTester" in result:
                     print("Registered backend fake player: " + result, flush=True)
+                    time.sleep(1)
+                    check_ping(1, ["SBotTester"])
                     break
             except (OSError, ValueError, RuntimeError):
                 pass
@@ -111,6 +169,8 @@ def main():
         assert len(matched) == 1, f"Expected random username in {roster}"
         name = matched[0]
         print("Generated bot " + name, flush=True)
+        time.sleep(1)
+        check_ping(3, ["SBotTester", name])
 
         def coords(line):
             stripped = re.sub(r"§.", "", line)
@@ -170,6 +230,7 @@ def main():
         status = rcon("sbot status")
         print("After 65 seconds with NO real clients:", listing,flush=True)
         print("SBot status:", status,flush=True)
+        check_ping(2, ["SBotTester", name])
         assert name in listing and "SBotTester" in listing
         assert "0 reales" in re.sub(r"§.", "", status)
         print("PASS: visible body, player-issued teleport, stable coordinates and persistence", flush=True)

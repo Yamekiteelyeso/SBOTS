@@ -1,7 +1,11 @@
-# SBot 2.3.0 - jugadores simulados en PlayerList de Paper.
+# SBot 2.4.0 - jugadores simulados en PlayerList de Paper.
 # No se crean conexiones TCP reales ni se autentican cuentas Microsoft.
 max-bots: 40
 max-create-per-command: 20
+# Mostrar los bots en el contador y en el hover de la lista multijugador del backend.
+server-list-enabled: true
+server-list-show-names: true
+server-list-max-sample: 12
 # Los bots consumen puestos del contador: reserva huecos para personas reales.
 minimum-free-slots: 2
 restore-on-startup: true

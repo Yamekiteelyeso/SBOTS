@@ -23,6 +23,7 @@ public final class SBotPlugin extends JavaPlugin implements Listener {
     private BotManager botManager;
     private SkinService skinService;
     private BotVisibility visibility;
+    private SBotServerPing serverPing;
 
     @Override
     public void onEnable() {
@@ -45,6 +46,7 @@ public final class SBotPlugin extends JavaPlugin implements Listener {
         botManager = new BotManager(this, skinService);
         visibility = new BotVisibility(this, botManager);
         botManager.setVisibility(visibility);
+        serverPing = new SBotServerPing(this, botManager);
 
         SBotCommand command = new SBotCommand(this, botManager);
         PluginCommand registered = getCommand("sbot");
@@ -52,6 +54,8 @@ public final class SBotPlugin extends JavaPlugin implements Listener {
         registered.setExecutor(command);
         registered.setTabCompleter(command);
         Bukkit.getPluginManager().registerEvents(this, this);
+        Bukkit.getPluginManager().registerEvents(serverPing, this);
+        Bukkit.getScheduler().runTaskTimer(this, serverPing::update, 1L, 10L);
         Bukkit.getScheduler().runTaskTimer(this, visibility::sync, 20L, 10L);
         Bukkit.getScheduler().runTaskTimer(this, () -> {
             if (getConfig().getBoolean("auto-reconnect-missing-bots", true)) botManager.maintain();
@@ -143,5 +147,6 @@ public final class SBotPlugin extends JavaPlugin implements Listener {
     void reloadSBot() {
         reloadConfig();
         loadMessages();
+        if (serverPing != null) serverPing.update();
     }
 }
