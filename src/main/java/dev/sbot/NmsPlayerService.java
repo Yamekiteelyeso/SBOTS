@@ -67,7 +67,7 @@ final class NmsPlayerService {
         enforcePosition(bot);
     }
 
-    /** Keep the server-side entity at the requested location, not world spawn. */
+    /** Native teleport via Bukkit dispatches the server's usual entity tracker updates. */
     static boolean enforcePosition(Bot bot) {
         if (!isRegistered(bot) || bot.location.getWorld() == null) return false;
         Location target = bot.location.clone();
@@ -77,20 +77,11 @@ final class NmsPlayerService {
                 && actual.distanceSquared(target) < 0.04
                 && Math.abs(actual.getYaw() - target.getYaw()) < 0.1
                 && Math.abs(actual.getPitch() - target.getPitch()) < 0.1) return true;
-
-        if (!actual.getWorld().equals(target.getWorld())) {
-            // Bukkit handles world changes; a native connection teleport
-            // alone cannot change dimensions.
-            if (!player.teleport(target, PlayerTeleportEvent.TeleportCause.PLUGIN)) return false;
-        } else {
-            // NMS owns this player's location: teleport the session itself to
-            // force Paper to update the entity AND its chunk tracking.
-            bot.handle.connection.teleport(target.getX(), target.getY(), target.getZ(),
-                    target.getYaw(), target.getPitch());
-        }
-        Location moved = player.getLocation();
-        return moved.getWorld().equals(target.getWorld())
-                && moved.distanceSquared(target) < 0.04;
+        if (!player.teleport(target, PlayerTeleportEvent.TeleportCause.PLUGIN)) return false;
+        bot.handle.setDeltaMovement(Vec3.ZERO);
+        actual = player.getLocation();
+        return actual.getWorld().equals(target.getWorld())
+                && actual.distanceSquared(target) < 0.04;
     }
 
     static boolean teleport(Bot bot, Location destination) {

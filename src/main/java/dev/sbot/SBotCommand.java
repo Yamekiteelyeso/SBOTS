@@ -5,6 +5,8 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.Location;
+import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -56,7 +58,7 @@ final class SBotCommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage(plugin.msg("create-limit", "max", String.valueOf(max)));
                     return true;
                 }
-                int created = manager.createMany(amount, player.getLocation());
+                int created = manager.createMany(amount, nearViewer(player));
                 if (created == 0) {
                     sender.sendMessage(plugin.msg("no-names"));
                 } else {
@@ -98,13 +100,13 @@ final class SBotCommand implements CommandExecutor, TabCompleter {
             case "tpall" -> {
                 if (!(sender instanceof Player player)) return playerOnly(sender);
                 if (args.length != 1) return usage(sender);
-                int moved = manager.teleportAll(player.getLocation());
+                int moved = manager.teleportAll(nearViewer(player));
                 sender.sendMessage(plugin.msg("teleported-all", "amount", String.valueOf(moved)));
             }
             case "tp" -> {
                 if (!(sender instanceof Player player)) return playerOnly(sender);
                 if (args.length != 2) return usage(sender);
-                if (manager.teleport(args[1], player.getLocation())) {
+                if (manager.teleport(args[1], nearViewer(player))) {
                     sender.sendMessage(plugin.msg("teleported", "name", args[1]));
                 } else sender.sendMessage(plugin.msg("not-found", "name", args[1]));
             }
@@ -159,6 +161,20 @@ final class SBotCommand implements CommandExecutor, TabCompleter {
             default -> { return usage(sender); }
         }
         return true;
+    }
+
+    /** One bot is positioned in front of the admin, not inside their camera. */
+    private Location nearViewer(Player viewer) {
+        Location center = viewer.getLocation().clone();
+        Vector forward = center.getDirection();
+        forward.setY(0);
+        if (forward.lengthSquared() > 0.001) {
+            forward.normalize().multiply(2.0);
+            center.add(forward);
+        } else {
+            center.add(2.0, 0, 0);
+        }
+        return center;
     }
 
     private boolean usage(CommandSender sender) {

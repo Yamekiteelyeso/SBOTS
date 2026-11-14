@@ -39,8 +39,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          test -s build/libs/SBot-2.2.0.jar
-          cp build/libs/SBot-2.2.0.jar dist/SBot-2.2.0-Paper-1.20.1.jar
+          test -s build/libs/SBot-2.3.0.jar
+          cp build/libs/SBot-2.3.0.jar dist/SBot-2.3.0-Paper-1.20.1.jar
           echo "Generated plugin artifact:"
           ls -lh dist/
 
@@ -48,7 +48,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SBot-Paper-1.20.1
-          path: dist/SBot-2.2.0-Paper-1.20.1.jar
+          path: dist/SBot-2.3.0-Paper-1.20.1.jar
           if-no-files-found: error
           retention-days: 30
 
@@ -56,7 +56,7 @@ jobs:
     name: Test SBot on a real Paper server
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -78,7 +78,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p server/plugins/SBot
-          AGENT="SBot-Integration-Test/2.2.0 (https://github.com/Yamekiteelyeso/SBOTS)"
+          AGENT="SBot-Integration-Test/2.3.0 (https://github.com/Yamekiteelyeso/SBOTS)"
           PAPER_BUILD="$(curl -fsSL --retry 3 -H "User-Agent: ${AGENT}" \
             https://fill.papermc.io/v3/projects/paper/versions/1.20.1/builds/196)"
           PAPER_URL="$(printf '%s' "$PAPER_BUILD" | jq -r '.downloads["server:default"].url // empty')"
@@ -110,5 +110,13 @@ jobs:
               pitch: 0.0
           BOTS
 
-      - name: Verify a bot stays connected without human players
+      - name: Set up Minecraft test client runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Minecraft 1.20.1 test client
+        run: npm install --no-save --no-audit --no-fund mineflayer@4
+
+      - name: Verify visibility, player-command teleport and persistence
         run: python3 scripts/smoke_test.py

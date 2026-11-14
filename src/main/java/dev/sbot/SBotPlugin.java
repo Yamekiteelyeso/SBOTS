@@ -9,6 +9,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -21,6 +22,7 @@ public final class SBotPlugin extends JavaPlugin implements Listener {
     private final Map<String, String> messages = new HashMap<>();
     private BotManager botManager;
     private SkinService skinService;
+    private BotVisibility visibility;
 
     @Override
     public void onEnable() {
@@ -41,6 +43,8 @@ public final class SBotPlugin extends JavaPlugin implements Listener {
         loadMessages();
         skinService = new SkinService(this);
         botManager = new BotManager(this, skinService);
+        visibility = new BotVisibility(this, botManager);
+        botManager.setVisibility(visibility);
 
         SBotCommand command = new SBotCommand(this, botManager);
         PluginCommand registered = getCommand("sbot");
@@ -48,6 +52,7 @@ public final class SBotPlugin extends JavaPlugin implements Listener {
         registered.setExecutor(command);
         registered.setTabCompleter(command);
         Bukkit.getPluginManager().registerEvents(this, this);
+        Bukkit.getScheduler().runTaskTimer(this, visibility::sync, 20L, 10L);
         Bukkit.getScheduler().runTaskTimer(this, () -> {
             if (getConfig().getBoolean("auto-reconnect-missing-bots", true)) botManager.maintain();
         }, 40L, 40L);
@@ -84,7 +89,13 @@ public final class SBotPlugin extends JavaPlugin implements Listener {
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
+    public void onViewerJoin(PlayerJoinEvent event) {
+        if (visibility != null) visibility.viewerJoined(event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
     public void onBotQuit(PlayerQuitEvent event) {
+        if (visibility != null) visibility.viewerQuit(event.getPlayer());
         if (botManager != null && botManager.isBot(event.getPlayer())) {
             getLogger().warning("Jugador simulado desconectado: " + event.getPlayer().getName()
                     + ". SBot intentara restaurarlo.");

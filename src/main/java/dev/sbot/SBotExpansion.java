@@ -11,7 +11,7 @@ final class SBotExpansion extends PlaceholderExpansion {
     SBotExpansion(BotManager manager) { this.manager = manager; }
     @Override public @NotNull String getIdentifier() { return "sbot"; }
     @Override public @NotNull String getAuthor() { return "SBot"; }
-    @Override public @NotNull String getVersion() { return "2.2.0"; }
+    @Override public @NotNull String getVersion() { return "2.3.0"; }
     @Override public boolean persist() { return true; }
 
     @Override public String onRequest(OfflinePlayer player, @NotNull String params) {

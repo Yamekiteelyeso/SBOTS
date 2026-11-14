@@ -34,6 +34,9 @@ final class BotManager {
     private final Map<ChunkKey, Integer> tickets = new HashMap<>();
     private final File file;
     private final Random random = new Random();
+    private BotVisibility visibility;
+
+    void setVisibility(BotVisibility visibility) { this.visibility = visibility; }
 
     BotManager(SBotPlugin plugin, SkinService skins) {
         this.plugin = plugin;
@@ -46,6 +49,8 @@ final class BotManager {
     int activeCount() { return (int) bots.values().stream().filter(NmsPlayerService::isRegistered).count(); }
     int pendingCount() { return size() - activeCount(); }
     int realOnlineCount() { return Math.max(0, Bukkit.getOnlinePlayers().size() - activeCount()); }
+
+    Collection<Bot> all() { return java.util.List.copyOf(bots.values()); }
 
     Collection<String> names() {
         List<String> result = new ArrayList<>();
@@ -137,7 +142,7 @@ final class BotManager {
             boolean changed = applySkin(bot, skin);
             if (changed) {
                 try {
-                    NmsPlayerService.refreshSkin(bot);
+                    if (visibility != null) visibility.botSkinUpdated(bot);
                 } catch (Throwable error) {
                     plugin.getLogger().warning("No se pudo actualizar la skin de " + name + ": " + error);
                 }
@@ -151,6 +156,7 @@ final class BotManager {
                 plugin.getLogger().warning("SBot " + bot.name + ": ubicacion no confirmada, se reintentara.");
             }
         }, 2L);
+        if (visibility != null) visibility.sync();
         return true;
     }
 
@@ -205,6 +211,7 @@ final class BotManager {
                 recoveryFailures.remove(id);
                 nextRecovery.remove(id);
                 plugin.getLogger().info("SBot " + bot.name + " restaurado.");
+                if (visibility != null) visibility.sync();
             } catch (Throwable error) {
                 int attempts = recoveryFailures.merge(id, 1, Integer::sum);
                 nextRecovery.put(id, now + (attempts <= 3 ? 5000 : 30000));
@@ -218,6 +225,7 @@ final class BotManager {
         Bot bot = find(name);
         if (bot == null) return false;
         bots.remove(key(name));
+        if (visibility != null) visibility.botRemoved(bot);
         nextRecovery.remove(key(name));
         recoveryFailures.remove(key(name));
         try {
@@ -234,6 +242,7 @@ final class BotManager {
         for (String name : new ArrayList<>(bots.keySet())) {
             Bot bot = bots.remove(name);
             if (bot == null) continue;
+            if (visibility != null) visibility.botRemoved(bot);
             try {
                 removeTicket(bot.location);
                 NmsPlayerService.remove(bot);
@@ -256,6 +265,7 @@ final class BotManager {
             removeTicket(previous);
             addTicket(bot.location);
         }
+        if (visibility != null) visibility.sync();
         save();
         return true;
     }

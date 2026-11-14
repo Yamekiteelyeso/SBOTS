@@ -1,4 +1,4 @@
-# SBot 2.2.0 - jugadores simulados en PlayerList de Paper.
+# SBot 2.3.0 - jugadores simulados en PlayerList de Paper.
 # No se crean conexiones TCP reales ni se autentican cuentas Microsoft.
 max-bots: 40
 max-create-per-command: 20
@@ -8,6 +8,10 @@ restore-on-startup: true
 load-premium-skins: true
 skin-cache: true
 spawn-spacing-blocks: 2.0
+# Alcance dentro del cual los clientes reciben las entidades SBot.
+visibility-range-blocks: 96
+# Reenvia spawn discretamente para recuperar entidades perdidas por plugins de tracking.
+visibility-resync-ticks: 200
 # Solo mientras el proceso Paper esta encendido.
 keep-bot-chunks-loaded: true
 # Evita expulsiones por timeout / inactividad del cliente simulado.
