@@ -56,6 +56,11 @@ final class NmsPlayerService {
         Player bukkit = handle.getBukkitEntity();
         bukkit.setSleepingIgnored(true);
         bukkit.setCollidable(false);
+        // Paper login may reset ServerPlayer movement settings.
+        // Reapply after PlayerList.placeNewPlayer so synthetic players never fall.
+        bukkit.setGravity(false);
+        handle.setNoGravity(true);
+        handle.setDeltaMovement(Vec3.ZERO);
         // Reposition AFTER registration: placeNewPlayer may reset the NMS
         // coordinates to world spawn. Unlike old code, teleport failures are
         // not silently ignored.

@@ -144,9 +144,9 @@ final class SBotCommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage(plugin.msg("info",
                             "name", bot.name,
                             "world", actualLocation.getWorld().getName(),
-                            "x", String.valueOf(actualLocation.getBlockX()),
-                            "y", String.valueOf(actualLocation.getBlockY()),
-                            "z", String.valueOf(actualLocation.getBlockZ()),
+                            "x", String.format(java.util.Locale.US, "%.2f", actualLocation.getX()),
+                            "y", String.format(java.util.Locale.US, "%.2f", actualLocation.getY()),
+                            "z", String.format(java.util.Locale.US, "%.2f", actualLocation.getZ()),
                             "skin", bot.skinLoaded ? "Premium" : "Predeterminada / cargando",
                             "state", NmsPlayerService.isRegistered(bot) ? "Conectado" : "Cargando"));
                 }

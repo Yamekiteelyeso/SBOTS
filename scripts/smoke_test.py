@@ -91,19 +91,25 @@ def main():
         assert len(matched) == 1, f"Expected one generated username, got {matched!r}"
         name = matched[0]
         assert name not in ("Notch", "Dream", "Grian", "jeb_")
+        def check_position(line):
+            stripped = re.sub(r"§.", "", line)
+            match = re.search(r"Posición:\\s*(-?\\d+(?:\\.\\d+)?),\\s*(-?\\d+(?:\\.\\d+)?),\\s*(-?\\d+(?:\\.\\d+)?)", stripped)
+            assert match, f"Could not parse player position: {line}"
+            actual = tuple(float(v) for v in match.groups())
+            desired = (64.5, 90.0, -32.5)
+            assert all(abs(x - target) < 0.35 for x, target in zip(actual, desired)), (
+                f"Bot spawned at {actual}, expected near {desired}"
+            )
+
         info = rcon(f"sbot info {name}")
         print("Actual bot position: " + info, flush=True)
-        assert re.search(r"64,\s*90,\s*-33", re.sub(r"§.", "", info)), (
-            f"Bot spawned in the wrong place: {info}"
-        )
+        check_position(info)
         time.sleep(65)
         listing = rcon("list")
         status = rcon("sbot status")
         later_info = rcon(f"sbot info {name}")
         print("Actual bot position after 65 seconds: " + later_info, flush=True)
-        assert re.search(r"64,\s*90,\s*-33", re.sub(r"§.", "", later_info)), (
-            f"Bot drifted from requested location: {later_info}"
-        )
+        check_position(later_info)
         assert name in listing, f"Generated bot missing after 65 seconds: {listing}"
         print("After 65 seconds: " + listing, flush=True)
         print("SBot status: " + status, flush=True)
